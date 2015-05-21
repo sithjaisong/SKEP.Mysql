@@ -1,16 +1,18 @@
-######### Title###########################
-#Purpoer : R script for query information from the SKEP website
-#
-#
-
-
-
+###########################Header##############################################
+# title         : data.R;
+# purpose       : Loads data from SKEP website of Syngenta SKEP1 data;
+# producer      : prepared by S. Jaisong (s.jaisong@irri.org);
+# last update   : in Los Baños, Laguna, PHL, May 2015;
+# inputs        :  Databsed of SKEP
+# outputs       : gernal info and injury profiles
+# remarks 1     : ;
+# remarks 2     : ;
+###############################End############################################
 ##### Loading the libraries ######
 library(dplyr)
 library(tidyr)
 
-
-##### Login #####
+###### Login ######
 urUsername <- "sjaisong"
 urPassword <- "MovingProton793"
 urdbname <- "syngenta"
@@ -84,11 +86,15 @@ all.ferti <- left_join(fertil.organic, fertil.mineral, by = "id_main")
 
 ##### 3. Pesticide applied #####
 
-weed_mgmt <- tbl(mydb,"weed_mgmt")
+weed_mgmt <- collect(tbl(mydb,"weed_mgmt"))
+
+weed.mgnt.type <- collect(tbl(mydb,"weed_mgnt_type"))
+
+#  weed_mgnt_type
 
 molluscicide <- tbl(mydb,"molluscicide")
 
-pesticides <- tbl(mydb,"pesticide")
+pesticides <- collect(tbl(mydb,"pesticides"))
 
 pest_mix_type <- tbl(mydb,"pest_mix_type")
 
@@ -101,80 +107,119 @@ all.mgmt <- left_join(weed_mgmt, molluscicid, pesticides, fungicide ,pest_mix_ty
 weight.harv <- tbl(mydb,"weight_harv")
 
 ######### Form 2 data ################
-# There are main #####
+# There are main 
 # 1. injuries info
 # 2. systemic injuries info
 # 3. weed infestration info
-# 4. weed species info
 
 
-#### 1. injuries info #############
+##### 1. injuries info #############
+# load data of no of tillesr, no of panicles , and no of leaves per tiller
+hill.quad <- tbl(mydb, "hill_quad") 
 
-hill.quad <- tbl(mydb, "hill_quad")
+#save as the data frame
+hill.quad.df <- collect(hill.quad) 
 
-hill.quad.df <- collect(hill.quad)
-
-hill.quad.df <-  hill.quad.df %>%
+# remove unnessary column and correct var.type of type_hq to factor
+hill.quad.df <-  hill.quad.df %>%  
         select(-id_hq) %>%
         transform(type_hq = as.factor(type_hq))
 
+# rename column names hq_sample to just sample
 names(hill.quad.df)[names(hill.quad.df) == "hq_sample"] <- "sample"
 
+# rename factor names of type_hq from code to abbreviation
 levels(hill.quad.df$type_hq) <- c("nt", "np", "nl")
 
-hill.quad.df.spread <- spread(hill.quad.df, type_hq, data)
-        
+# reference of tyope of hill data
 #type_hq <- tbl(mydb, "type_hq")
 
-#===================================================
+# make data tidy
+hill.quad.df.spread <- spread(hill.quad.df, type_hq, data)
+        
+
+# load injury table, which contain the all leave injuries, tiller injuires, panicle injuries
 injuries <- tbl(mydb,"injury")
 
+# save as data frame
 injuries.df <- collect(injuries)
 
+# revome unnessary column and corract var.type to factor
 injuries.df <- injuries.df %>%
         select(-id_pest_tp) %>%
         transform(inj_tp_type = as.factor(inj_tp_type))
 
+# rename inj_sample to sample for matching with the hill data
 names(injuries.df)[names(injuries.df) == "inj_sample"] <- "sample"
 
+# save list of injuires 
 injury.detail <- collect(tbl(mydb,"injury_detail"))$injury
 
+#rename the levels of injury types 
 levels(injuries.df$inj_tp_type) <- injury.detail
 
+# make data more tidy
 injuries.df.spread <- spread(injuries.df, inj_tp_type, inj_tp_data)
 
-#====================================================
-#combine
-
+# join the hill data and injury data
 all.injuries <- left_join(hill.quad.df.spread, injuries.df.spread, by =c( "id_ci", "sample" ))
 
-#################################
 
-################################
+##### 2. systemic injuries info #####
+# save as data fram of systemic injuries table
+#systemic <- collect(tbl(mydb, "systemis"))
+# delete unnessary column 
+systemic$id_syst <- NULL
+#set as factor of type of systemic injuiries
+systemic$sys_type_id <- as.factor(systemic$sys_type_id)
 
+# save the systemic list to data frame
+systemic.type <- collect(tbl(mydb,"systemis_type"))$injury
+# rename the systemic type code to name of systemic injuries
+levels(systemic$sys_type_id) <- systemic.type
 
+# make data more tidy
+systemic.df.spread <- spread(systemic, sys_type_id, inj_data)
 
-head(injury.df)
-general.info <- tbl(conDdplyr,"general_info")
-all.inj <- left_join(hill.quad, injury, by = c("id_ci" = "id_ci", "hq_sample" = "inj_sample"))
+#### 3. weed infestration info ######
 
-all.inj <- collect(all.inj)
-class(all.inj)
+weed.rank <- collect(tbl(mydb, "weed_rank"))
 
-all.inj1 <- all.inj %>% transform(
-        inj_tp_type = as.factor(inj_tp_type)) 
+# remove the unnessary column
+weed.rank$id_weed_rank <- NULL
+weed.rank$main_weed <- NULL
 
-spread.all.inj <- spread(all.inj, inj_tp_type, inj_tp_data)
+# set weed type as the factor
+weed.rank$weed_type <- as.factor(weed.rank$weed_type)
 
-# myDF1 <- filter(myDF, fare > 150)
-# myDF2 <- select(myDF1, pclass,sex,age,fare)
-# myDF3 <- group_by(myDF2, pclass,sex)
-# myDF4 <- summarise(myDF3, 
-#                    avg_age = mean(age),
-#                    avg_fare = mean(fare))
+# save the list of weed type
+weed.type <- collect(tbl(mydb,"weed_type"))$weed_type
 
+# rename weed type codes to weed type names
+levels(weed.rank$weed_type) <- weed.type
 
-head(dbReadTable(mydb, list.table[4]))
-names(dbReadTable(mydb, "active_ingr"))
+# make data more tidy
+weed.rank.df.spread <- spread(weed.rank, weed_type, data)
 
+# save as data frame of main weed species
+weed.main <- collect(tbl(mydb, "weed_main"))
 
+# set sampling area as the factor
+weed.main$area <- as.factor(weed.main$area)
+
+# rename sampling area from A, B, C to 1, 2, 3
+levels(weed.main$area) <- c("1", "2", "3")
+
+# remove unnessary column 
+weed.main$id_weed_main <- NULL
+
+# save to data frame of weed species lists
+weed.list <- collect(tbl(mydb,"weed_list"))
+
+# combine the main weed spcies with weed main species codes
+all.weed <- left_join(weed.main, weed.list, by = "weed_list_id" )
+
+# combine weed ranking with main weed species
+weed.info <- left_join(weed.rank.df.spread, all.weed, by = c("id_ci" , "area"))
+
+# eos
